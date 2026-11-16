@@ -9,12 +9,15 @@ description = "Read-only social web browsing MCP, currently supporting Xiaohongs
 readme = "README.md"
 requires-python = ">=3.12,<3.14"
 dependencies = [
-  "mcp>=1.12,<2",
+  "mcp>=1.30,<2",
+  "httpx>=0.27,<1",
   "playwright>=1.49,<2",
+  "pystray>=0.19,<1",
+  "pillow>=10,<13",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8,<10"]
+dev = ["pytest>=8,<10", "pyinstaller>=6,<7"]
 
 [project.scripts]
 social-info-mcp = "social_info.server:main"

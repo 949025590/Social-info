@@ -1,3 +1,3 @@
-from .server import main
+from .entry import main
 
 main()

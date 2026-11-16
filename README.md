@@ -2,7 +2,27 @@
 
 一个本地、只读、可扩展的社交网页浏览 MCP。第一期使用 Python + Playwright 支持小红书，保留平台适配层，后续可增加抖音等平台。
 
-> 当前为 `0.1.0` 源码验证版。真实网页结构可能变化；登录后的搜索、评论和媒体流程需要用你的账号验收。EXE/Inno Setup 安装包将在核心流程稳定后制作。
+> 当前为 `0.1.0` 验证版。提供源码、Windows EXE 和安装包构建；网页结构可能变化，实际可用性以真实账号验收为准。
+
+## 普通用户安装与启动
+
+1. 运行 `SocialInfo-Setup.exe`，无需安装 Python、Conda 或其他运行环境。
+2. 安装完成后双击桌面 **Social Info** 图标，程序自动启动本地 MCP 服务。
+3. 在控制面板点击“登录小红书”，扫码后点击“登录完成”。
+4. 关闭控制面板只会隐藏到系统托盘；右键托盘图标可重新打开、查看日志或完全退出。
+5. 安装时可选“开机自动启动”。程序仅监听本机地址，不开放公网服务。
+
+安装版的 Agent MCP 配置：
+
+```json
+{
+  "mcpServers": {
+    "social-info": {
+      "url": "http://127.0.0.1:8765/mcp"
+    }
+  }
+}
+```
 
 ## 功能
 
@@ -34,7 +54,9 @@ playwright install chromium
 ## 启动 MCP
 
 ```bash
-python -m social_info serve
+python -m social_info serve                 # stdio
+python -m social_info serve --transport http # 本机 HTTP，端口 8765
+python -m social_info                        # 托盘控制面板
 # 或
 social-info-mcp serve
 ```
@@ -102,7 +124,8 @@ social_session_status
 错误返回包含 `code`、`message`、`recovery`、`retryable` 和 `operation_id`。
 
 - `AUTH_REQUIRED`：重新显式登录。
-- `VERIFICATION_REQUIRED`：暂停自动化，由用户完成验证。
+- `APP_SCAN_REQUIRED`：该笔记要求使用小红书 App 扫码；程序会打开目标页并等待正文出现。
+- `VERIFICATION_REQUIRED`：暂停自动化，由用户完成安全验证。
 - `STALE_SNAPSHOT`：重新读取快照，不使用旧元素引用。
 - `OUTCOME_UNKNOWN`：先查看当前页面，禁止直接重复点击。
 - `PAGE_CHANGED`：保存诊断信息并更新适配器，不连续重试。
@@ -111,13 +134,30 @@ social_session_status
 
 部分评论或媒体读取失败时，应保留已读数据并明确说明不完整。验证码、短信码和账号限制不由 Agent 自动处理。
 
+## 构建 Windows 安装包
+
+开发环境安装依赖后，在本机安装 Inno Setup 7，然后运行：
+
+```bash
+python scripts/build_windows.py
+```
+
+产物位于：
+
+- `dist\SocialInfo\SocialInfo.exe`：免安装程序入口。
+- `dist\installer\SocialInfo-Setup.exe`：单用户安装包，捆绑匹配版本 Chromium。
+
+`--no-installer` 可只构建 EXE。构建过程会显式包含 Conda 的 `ffi-8.dll` 等运行库，避免普通电脑出现 DLL 缺失。
+
 ## 测试
 
 ```bash
 pytest -q
+python scripts/verify_live.py               # 首次显式登录及真实网页验收
+python scripts/verify_live.py --search-only # 复用已有登录状态
 ```
 
-测试覆盖 URL 白名单、点击防护、敏感 URL 参数脱敏、HTML 清理与分块，以及通过真实 stdio 子进程完成 MCP 初始化、工具发现和状态调用。测试不需要登录小红书。
+自动化测试覆盖 URL 白名单、点击防护、参数脱敏、HTML 分块、浏览器状态复用、异常关闭，以及 stdio/HTTP 两种真实 MCP 子进程调用。`verify_live.py` 会实际搜索、打开笔记、读取评论与媒体并保存截图；遇到安全验证时需要用户完成，不能跳过。
 
 ## 项目结构
 

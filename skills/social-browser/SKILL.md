@@ -20,6 +20,7 @@ description: 使用 Social-info MCP 以只读方式搜索和浏览小红书；�
 
 - `AUTH_REQUIRED`：显式登录。
 - `VERIFICATION_REQUIRED`：暂停并让用户在有界面浏览器中验证，不绕过。
+- `APP_SCAN_REQUIRED`：打开目标笔记，让用户用小红书 App 扫码；检测正文后再继续。
 - `STALE_SNAPSHOT`：重新读取页面后再点击。
 - `OUTCOME_UNKNOWN`：先查看任务现场和当前页面，不直接重复操作。
 - `RATE_LIMITED`、`ACCOUNT_RESTRICTED`：停止，不换账号、代理或反复刷新。

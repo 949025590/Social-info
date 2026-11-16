@@ -23,14 +23,19 @@ class BrowserAdapter:
         self._headless = None
         self._snapshot_id = None
         self._html_cache = None
+        self._last_requested_url = None
 
     async def _close_context(self):
-        if self._context:
-            await self._context.close()
-        self._context = None
-        self._headless = None
-        self._snapshot_id = None
-        self._html_cache = None
+        try:
+            if self._context:
+                await self._context.close()
+        except PlaywrightError:
+            pass
+        finally:
+            self._context = None
+            self._headless = None
+            self._snapshot_id = None
+            self._html_cache = None
 
     async def close(self):
         async with self.lock:
@@ -67,10 +72,9 @@ class BrowserAdapter:
             raise SocialError("BROWSER_STOPPED", "浏览器尚未启动")
         return self._context.pages[-1] if self._context.pages else None
 
-    async def _page(self):
-        if self._context and self._headless is False:
-            raise SocialError("HEADED_SESSION_ACTIVE", "请先确认登录并切回后台模式", "social_login_finish")
-        await self._launch(True)
+    async def _page(self, allow_headed=False):
+        if not self._context:
+            await self._launch(True)
         page = self._page_now()
         if not page:
             page = await self._context.new_page()
@@ -94,7 +98,7 @@ class BrowserAdapter:
     async def login_start(self):
         await self._launch(False)
         page = self._page_now() or await self._context.new_page()
-        await page.goto(self.home, wait_until="domcontentloaded")
+        await page.goto(self._last_requested_url or self.home, wait_until="domcontentloaded")
         return {"state": "waiting_user", "message": "请在浏览器中扫码或完成安全验证，完成后调用 social_login_finish"}
 
     async def login_finish(self):
@@ -106,6 +110,7 @@ class BrowserAdapter:
 
     async def open_url(self, url):
         validate_url(url, self.hosts)
+        self._last_requested_url = url
         page = await self._page()
         try:
             await page.goto(url, wait_until="domcontentloaded")
@@ -116,7 +121,7 @@ class BrowserAdapter:
         return await self.snapshot()
 
     async def snapshot(self):
-        page = await self._page()
+        page = await self._page(allow_headed=True)
         await self._check(page)
         data = await page.evaluate("""() => {
           const nodes = [...document.querySelectorAll('a[href],button,input,[role=button]')]
@@ -191,7 +196,7 @@ class BrowserAdapter:
                         raise SocialError("INVALID_ARGUMENT", "seconds 必须是非负数")
                     await video.evaluate("(v,t)=>v.currentTime=Math.min(t,v.duration||t)", seconds)
                 else:
-                    await video.evaluate("v=>v.paused?v.play():v.pause()" if action == "video_play" else "v=>v.pause()")
+                    await video.evaluate("v=>v.play()" if action == "video_play" else "v=>v.pause()")
             elif not await self._custom_action(page, action, delta=delta):
                 raise SocialError("ACTION_NOT_SUPPORTED", f"不支持动作：{action}")
             await page.wait_for_timeout(500)
@@ -232,7 +237,9 @@ class BrowserAdapter:
         return body, content_type.split("/")[1].split(";")[0].replace("jpeg", "jpg")
 
     async def screenshot(self):
-        page = await self._page()
+        page = self._page_now() if self._context else await self._page()
+        if not page:
+            raise SocialError("BROWSER_STOPPED", "当前没有可截图的页面")
         return await page.screenshot(type="png", full_page=False)
 
     async def comments(self, limit=20, cursor=0):

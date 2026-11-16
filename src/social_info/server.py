@@ -1,3 +1,4 @@
+import argparse
 import asyncio
 import functools
 import logging
@@ -154,6 +155,15 @@ async def social_screenshot(platform: str = "xiaohongshu") -> Image:
 
 @mcp.tool()
 @safe_tool
+async def social_server_stop() -> dict[str, Any]:
+    """关闭受管浏览器并停止本地 MCP 服务，供托盘程序使用。"""
+    await service.close()
+    asyncio.get_running_loop().call_later(0.5, os._exit, 0)
+    return {"state": "stopped"}
+
+
+@mcp.tool()
+@safe_tool
 async def social_close(platform: str = "xiaohongshu") -> dict[str, Any]:
     """关闭该平台浏览器；保留磁盘上的登录状态。"""
     async with service.use(platform) as adapter:
@@ -162,11 +172,18 @@ async def social_close(platform: str = "xiaohongshu") -> dict[str, Any]:
 
 
 def main():
-    if len(sys.argv) > 1 and sys.argv[1] != "serve":
-        print("用法：social-info-mcp [serve]", file=sys.stderr)
-        raise SystemExit(2)
+    parser = argparse.ArgumentParser(description="Social Info MCP")
+    parser.add_argument("command", nargs="?", default="serve", choices=["serve"])
+    parser.add_argument("--transport", choices=["stdio", "http"], default="stdio")
+    parser.add_argument("--port", type=int, default=8765)
+    args = parser.parse_args()
     try:
-        mcp.run()
+        if args.transport == "http":
+            mcp.settings.host = "127.0.0.1"
+            mcp.settings.port = args.port
+            mcp.run(transport="streamable-http")
+        else:
+            mcp.run()
     finally:
         asyncio.run(service.close())
 

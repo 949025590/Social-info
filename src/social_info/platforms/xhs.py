@@ -1,4 +1,5 @@
 import hashlib
+from urllib.parse import quote, urlparse
 
 from playwright.async_api import Error as PlaywrightError
 
@@ -17,6 +18,7 @@ class XhsAdapter(BrowserAdapter):
         self._items = {}
         self._search_order = []
         self._current_item = None
+        self._search_url = None
 
     async def auth_state(self, page):
         url = page.url.lower()
@@ -27,11 +29,11 @@ class XhsAdapter(BrowserAdapter):
         try:
             if await page.locator(".login-container").first.is_visible():
                 return "logged_out"
-            search = page.locator("input").first
-            placeholder = await search.get_attribute("placeholder") if await search.count() else ""
-            if "登录" in (placeholder or ""):
+            if await page.locator('input[placeholder*="登录"]:visible').count():
                 return "logged_out"
-            if await page.locator('input[placeholder*="搜索"]').first.is_visible():
+            if await page.locator('input[placeholder*="搜索"]:visible').count():
+                return "logged_in"
+            if await page.get_by_role("link", name="我", exact=True).last.is_visible():
                 return "logged_in"
         except PlaywrightError:
             return "unknown"
@@ -39,6 +41,16 @@ class XhsAdapter(BrowserAdapter):
 
     async def _check(self, page):
         state = await self.auth_state(page)
+        if state == "verification_required":
+            try:
+                await page.get_by_text("当前笔记暂时无法浏览", exact=True).wait_for(timeout=4000)
+            except PlaywrightError:
+                pass
+        body = await page.locator("body").inner_text()
+        if "当前笔记暂时无法浏览" in body or "请打开小红书App扫码查看" in body:
+            raise SocialError("APP_SCAN_REQUIRED", "该笔记需要使用小红书 App 扫码查看", "social_login_start")
+        if "笔记不存在" in body or "笔记已删除" in body:
+            raise SocialError("CONTENT_UNAVAILABLE", "笔记不存在或已删除", "next_content")
         if state == "verification_required":
             raise SocialError("VERIFICATION_REQUIRED", "页面要求安全验证", "social_login_start")
         if state == "logged_out":
@@ -54,10 +66,14 @@ class XhsAdapter(BrowserAdapter):
             await page.goto(self.home, wait_until="domcontentloaded")
         if await self.auth_state(page) != "logged_in":
             raise SocialError("AUTH_REQUIRED", "请先显式登录小红书", "social_login_start")
-        box = page.locator('input[placeholder*="搜索"]').first
+        box = page.locator("input:visible").first
         try:
             await box.fill(keyword)
             await box.press("Enter")
+            await page.wait_for_url("**/search_result**", timeout=6000)
+        except PlaywrightError:
+            await page.goto(f"{self.home}/search_result?keyword={quote(keyword)}", wait_until="domcontentloaded")
+        try:
             await page.locator("section.note-item").first.wait_for(timeout=12000)
         except PlaywrightError as exc:
             await self._check(page)
@@ -72,6 +88,7 @@ class XhsAdapter(BrowserAdapter):
             author:(author?.innerText||'').trim(), text:(card.innerText||'').trim(),
             image:img?.currentSrc||img?.src||null};
         })""")
+        self._search_url = page.url
         items = []
         self._search_order = []
         for card in cards:
@@ -88,8 +105,22 @@ class XhsAdapter(BrowserAdapter):
 
     async def open_content(self, target):
         url = self._items.get(target, target)
-        if target in self._items:
-            self._current_item = target
+        if target not in self._items:
+            return await self.open_url(url)
+        self._current_item = target
+        self._last_requested_url = url
+        page = await self._page()
+        path = urlparse(url).path
+        links = page.locator(f'a[href*="{path}"]')
+        try:
+            if await links.count():
+                await links.first.click()
+                await page.wait_for_timeout(1200)
+                page = self._page_now()
+                await self._check(page)
+                return await self.snapshot()
+        except PlaywrightError:
+            pass
         return await self.open_url(url)
 
     async def _custom_action(self, page, action, **kwargs):
@@ -112,6 +143,9 @@ class XhsAdapter(BrowserAdapter):
             index += 1 if action == "next_content" else -1
             if index < 0 or index >= len(self._search_order):
                 raise SocialError("END_OF_LIST", "已经到达列表边界")
+            if self._search_url:
+                await page.goto(self._search_url, wait_until="domcontentloaded")
+                await page.locator("section.note-item").first.wait_for(timeout=12000)
             await self.open_content(self._search_order[index])
             return True
         return False
