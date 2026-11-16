@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "social-info"
+version = "0.1.0"
+description = "Read-only social web browsing MCP, currently supporting Xiaohongshu"
+readme = "README.md"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+  "mcp>=1.12,<2",
+  "playwright>=1.49,<2",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<10"]
+
+[project.scripts]
+social-info-mcp = "social_info.server:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
