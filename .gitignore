@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Build outputs
+build/
+dist/
+
+# Playwright and test outputs
+.playwright/
+playwright-report/
+test-results/
+
+# Local application data
+profiles/
+sessions/
+cookies/
+cache/
+logs/
+downloads/
+*.log
+
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+config.local.json
+*.pem
+*.key
+id_rsa*
+id_ed25519*
+social_info_github_ed25519*
+
+# Windows
+Thumbs.db
+Desktop.ini
