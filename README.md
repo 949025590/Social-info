@@ -2,6 +2,8 @@
 
 一个本地、只读、可扩展的社交网页浏览 MCP。第一期使用 Python + Playwright 支持小红书，保留平台适配层，后续可增加抖音等平台。
 
+**使用入口：**[下载安装包](https://github.com/949025590/Social-info/releases/latest) · [普通用户操作指南](docs/USER_GUIDE.md) · [真实浏览器扩展验收脚本](scripts/verify_extension.py)
+
 > 当前为 `0.1.0` 验证版。提供源码、Windows EXE 和安装包构建；网页结构可能变化，实际可用性以真实账号验收为准。
 
 ## 普通用户安装与启动
