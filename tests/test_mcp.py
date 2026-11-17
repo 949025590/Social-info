@@ -20,6 +20,9 @@ async def check_server():
             result = await client.call_tool("social_session_status", {})
             assert result.structuredContent["ok"] is True
             assert result.structuredContent["browser"] == "stopped"
+            extension = await client.call_tool("social_extension_status", {})
+            assert extension.structuredContent["connected"] is False
+            assert extension.structuredContent["port"] == 8766
 
 
 def test_mcp_stdio():

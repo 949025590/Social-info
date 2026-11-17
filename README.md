@@ -134,6 +134,27 @@ social_session_status
 
 部分评论或媒体读取失败时，应保留已读数据并明确说明不完整。验证码、短信码和账号限制不由 Agent 自动处理。
 
+## 真实浏览器扩展（已完成基础验收）
+
+该模式通过本地 Chrome/Edge 扩展读取用户当前的小红书标签页，不经过第三方服务器。扩展源码位于 `extension/`，仅申请小红书域名及本机连接所需权限。
+
+1. 启动托盘程序或 `python -m social_info serve --transport http`。
+2. 在 `chrome://extensions/` 或 `edge://extensions/` 开启开发人员模式。
+3. 选择“加载解压缩的扩展程序”，加载项目的 `extension/` 目录。
+4. 将 `%LOCALAPPDATA%\SocialInfo\extension-token.txt` 中的随机令牌粘贴到扩展弹窗并连接。
+5. 在真实浏览器中打开目标小红书页面。
+
+扩展工具包括状态检查、打开、读取、点击、滚动、返回、图片切换、视频控制、评论和截图。连接仅监听 `127.0.0.1:8766`，令牌错误或无小红书标签页时会明确失败。截图使用浏览器调试接口，调用时附加、完成后立即断开；Edge 可能短暂显示调试提示。
+
+扩展模式不改变原有无头工具。真实验收脚本：
+
+```bash
+python scripts/verify_extension.py           # 视频笔记
+python scripts/verify_extension.py 美食图文  # 图文笔记
+```
+
+脚本会选择实际搜索结果，读取正文、HTML、评论与媒体，并按页面能力测试视频、图片、返回和截图。没有扫码权限的笔记会跳过，不会自动绕过。
+
 ## 构建 Windows 安装包
 
 开发环境安装依赖后，在本机安装 Inno Setup 7，然后运行：

@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "Social Info 本地浏览器连接",
+  "version": "0.1.5",
+  "description": "仅连接本机 Social Info，用于读取和操作当前小红书页面。",
+  "permissions": ["activeTab", "scripting", "tabs", "storage", "alarms", "debugger"],
+  "host_permissions": ["https://*.xiaohongshu.com/*", "http://127.0.0.1/*"],
+  "background": {"service_worker": "background.js"},
+  "action": {"default_title": "Social Info 本地连接", "default_popup": "popup.html"},
+  "icons": {"128": "icon.png"}
+}

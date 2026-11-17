@@ -27,6 +27,7 @@ def main():
     for source in cache.iterdir():
         if source.is_dir() and source.name.startswith(("chromium-", "chromium_headless_shell-", "ffmpeg-", "winldd-")):
             shutil.copytree(source, target / source.name, dirs_exist_ok=True)
+    shutil.copytree(ROOT / "extension", ROOT / "dist" / "SocialInfo" / "extension", dirs_exist_ok=True)
     print(f"EXE 目录：{ROOT / 'dist' / 'SocialInfo'}")
     if args.no_installer:
         return

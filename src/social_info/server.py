@@ -1,5 +1,6 @@
 import argparse
 import asyncio
+import base64
 import functools
 import logging
 import os
@@ -10,7 +11,8 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP, Image
 
-from .core import SocialError
+from .core import SocialError, redact_html, sanitize_html, validate_url
+from .extension_hub import ExtensionHub
 from .service import SocialService
 
 log_dir = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "SocialInfo" / "logs"
@@ -20,6 +22,7 @@ logging.basicConfig(filename=log_dir / "mcp.log", level=logging.INFO,
 log = logging.getLogger("social-info")
 mcp = FastMCP("social-info")
 service = SocialService()
+extension_hub = ExtensionHub()
 
 
 def safe_tool(func):
@@ -155,6 +158,81 @@ async def social_screenshot(platform: str = "xiaohongshu") -> Image:
 
 @mcp.tool()
 @safe_tool
+async def social_extension_status() -> dict[str, Any]:
+    """查看本地 Chrome/Edge 扩展连接状态和令牌文件位置。"""
+    return {"connected": extension_hub.connection is not None,
+            "token_file": str(extension_hub.token_path), "port": extension_hub.port}
+
+
+@mcp.tool()
+@safe_tool
+async def social_extension_open(url: str) -> dict[str, Any]:
+    """通过真实浏览器扩展打开小红书链接。"""
+    adapter = service.adapters["xiaohongshu"]
+    validate_url(url, adapter.hosts)
+    return await extension_hub.call("open", {"url": url})
+
+
+@mcp.tool()
+@safe_tool
+async def social_extension_read(include_html: bool = False) -> dict[str, Any]:
+    """读取真实浏览器当前小红书标签页的正文、媒体和可选清理后 HTML。"""
+    data = await extension_hub.call("read", {"includeHtml": include_html})
+    if include_html and data.get("html"):
+        html = redact_html(sanitize_html(data["html"]))
+        data["html"] = html[:30000]
+        data["html_truncated"] = len(html) > 30000
+    return data
+
+
+@mcp.tool()
+@safe_tool
+async def social_extension_click(url: str) -> dict[str, Any]:
+    """在真实浏览器当前页面点击与指定小红书链接相同的笔记链接。"""
+    adapter = service.adapters["xiaohongshu"]
+    validate_url(url, adapter.hosts)
+    return await extension_hub.call("click", {"url": url})
+
+
+@mcp.tool()
+@safe_tool
+async def social_extension_interact(action: str, delta: int = 650,
+                                    seconds: float = 0) -> dict[str, Any]:
+    """在真实浏览器中滚动、返回、切换图片或控制视频。"""
+    if action in {"scroll_down", "scroll_up"}:
+        return await extension_hub.call("scroll", {"delta": abs(delta) if action == "scroll_down" else -abs(delta)})
+    if action == "back":
+        return await extension_hub.call("back")
+    if action in {"video_play", "video_pause", "video_seek"}:
+        return await extension_hub.call("video", {"action": action, "seconds": seconds})
+    if action in {"image_next", "image_previous"}:
+        return await extension_hub.call("image", {"action": action})
+    raise SocialError("ACTION_NOT_SUPPORTED", f"扩展模式不支持动作：{action}")
+
+
+@mcp.tool()
+@safe_tool
+async def social_extension_comments() -> dict[str, Any]:
+    """读取真实浏览器当前笔记已加载的评论。"""
+    items = await extension_hub.call("comments")
+    return {"items": items, "returned": len(items), "partial": True}
+
+
+@mcp.tool()
+@safe_tool
+async def social_extension_screenshot() -> Image:
+    """截取真实浏览器当前可见的小红书页面。"""
+    try:
+        data = await extension_hub.call("screenshot")
+        return Image(data=base64.b64decode(data["base64"]), format="png")
+    except SocialError as exc:
+        if "activeTab" in str(exc):
+            raise SocialError("SCREENSHOT_PERMISSION_REQUIRED", "请在当前小红书页面点击一次扩展图标后重试") from exc
+        raise
+
+
+@mcp.tool()
+@safe_tool
 async def social_server_stop() -> dict[str, Any]:
     """关闭受管浏览器并停止本地 MCP 服务，供托盘程序使用。"""
     await service.close()
@@ -178,6 +256,10 @@ def main():
     parser.add_argument("--port", type=int, default=8765)
     args = parser.parse_args()
     try:
+        extension_hub.start()
+    except Exception:
+        log.exception("extension hub failed to start")
+    try:
         if args.transport == "http":
             mcp.settings.host = "127.0.0.1"
             mcp.settings.port = args.port
@@ -186,6 +268,7 @@ def main():
             mcp.run()
     finally:
         asyncio.run(service.close())
+        extension_hub.stop()
 
 
 if __name__ == "__main__":
